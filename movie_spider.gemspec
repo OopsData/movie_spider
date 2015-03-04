@@ -27,7 +27,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake", "~> 10.0"
 
   spec.add_dependency "rspec"
-  spec.add_dependency "capybara-webkit"
+  # spec.add_dependency "capybara-webkit"
   spec.add_dependency "micro_spider"
   spec.add_dependency "spreadsheet"
 end
