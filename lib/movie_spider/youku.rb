@@ -14,15 +14,15 @@ module MovieSpider
       urls  = get_play_url
       urls.each do |hash|
         @logger.info  "=============>  runing youku  #{hash[:url]} <=============="
-        #begin
+        begin
           data = start_crawl(hash)
           infos << data if data.present?          
-        # rescue
-        #   @logger.info '--------------------------youku error while executing next url start--------------------------'
-        #   @logger.info  hash[:url]
-        #   @logger.info '--------------------------youku error while executing next url end  --------------------------'
-        #   next
-        # end 
+        rescue
+          @logger.info '--------------------------youku error while executing next url start--------------------------'
+          @logger.info  hash[:url]
+          @logger.info '--------------------------youku error while executing next url end  --------------------------'
+          next
+        end 
       end
       infos.delete_if{|e| e[:url] == nil }
       return infos
