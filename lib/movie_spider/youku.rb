@@ -18,7 +18,7 @@ module MovieSpider
           infos << data if data.present?          
         rescue
           puts'--------------------------youku error while executing next url start--------------------------'
-          puts url
+          puts hash[:url]
           puts'--------------------------youku error while executing next url end  --------------------------'
           next
         end 
