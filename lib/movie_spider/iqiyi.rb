@@ -1,10 +1,11 @@
 require 'micro_spider'
-
+require 'logger'
 module MovieSpider
 
   class Iqiyi
     def initialize(path)
       @path = path.gsub(/\s+/,'')
+      @logger = Logger.new(STDOUT)
     end
   
     # 获取每一个播放页面的相关信息
@@ -12,17 +13,9 @@ module MovieSpider
       infos = []
       urls  = get_play_url
       urls.each do |hash|
-        puts "=============>  runing iqiyi  #{hash[:url]} <=============="
+        @logger.info "=============>  runing iqiyi  #{hash[:url]} <=============="
         data = start_crawl(hash)
         infos << data if data.present?
-        # begin
-        #   infos << start_crawl(hash)
-        # rescue
-        #   puts'--------------------------iqiyi error while executing next url start--------------------------'
-        #   puts url
-        #   puts'--------------------------iqiyi error while executing next url end  --------------------------'
-        #   next
-        # end
       end
       infos.delete_if{|e| e[:url] == nil }
       return infos
@@ -41,22 +34,13 @@ module MovieSpider
   
     # 获取介绍页海报处的url
     def get_post_url(page)
-      # TODO  这里有个pianhua页面需要重新爬取
-      # TODO  搜索页面也需要重新爬取
       return unless @path.include?('lib')
-      # begin
         if page.search('.search-btn-green').text.match(/播放/)
           type = '正片'
         else
           type = '预告片'
         end
         res = [{url:page.search('.result_pic  a').attr('href').to_s,type:type}]
-      # rescue
-      #   puts'--------------------------iqiyi error while get post url start--------------------------'
-      #   puts @path
-      #   puts'--------------------------iqiyi error while get post url end  --------------------------'        
-      #   res = []
-      # end
       return res
     end
   

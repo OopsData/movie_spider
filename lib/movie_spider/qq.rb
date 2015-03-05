@@ -1,11 +1,12 @@
 require 'micro_spider'
-
+require 'logger'
 module MovieSpider
 
   class Qq
     def initialize(path)
       @path = path.gsub(/\s+/,'')
       @cid  = nil
+      @logger = Logger.new(STDOUT)
     end
   
     # 获取每一个播放页面的相关信息
@@ -13,13 +14,13 @@ module MovieSpider
       infos = []
       urls  = get_play_url
       urls.each do |hash|
-        puts "=============>  runing tecent  #{hash[:url]} <=============="
+        @logger.info "=============>  runing tecent  #{hash[:url]} <=============="
         begin
           data = start_crawl(hash)
           infos << data if data.present?          
         rescue
           puts'--------------------------qq error while executing next url start--------------------------'
-          puts hash[:url]
+          @logger.info hash[:url]
           puts'--------------------------qq error while executing next url end  --------------------------'
           next
         end
@@ -45,19 +46,12 @@ module MovieSpider
       # 播放源
       source =  page.search('#cont_playsource  .link_source_default').attr('sourcename').value 
       if source.match(/qq/)
-        # begin
           id     =  get_id
           href   =  @path.gsub('detail','cover')
           href   =  href + "?vid=#{id}"
           title  =  page.search('.video_title strong a').text
           type   = page.search('.mark_trailer').present? ?  '预告片' : '正片' 
           url << {url:href,title:title,type:type}  
-        # rescue
-        #   puts'--------------------------qq error while get post url start--------------------------'
-        #   puts @path
-        #   puts'--------------------------qq error while get post url end  --------------------------'          
-        #   url = [{url:nil,title:nil}]
-        # end
       end
       return url
     end
@@ -87,17 +81,9 @@ module MovieSpider
       uri   = URI::encode("http://s.video.qq.com/loadplaylist?otype=json&type=2&pagestart=1&num=96&id=#{vid}")
       page  = get_page(uri)
       res   = JSON.parse(page.body.gsub('QZOutputJson=','').gsub(';',''))
-      # begin
-        res['video_play_list']['playlist'].each do |obj|
-          urls << {url:obj['url'],title:obj['title'],type:'预告片'}
-        end
-      # rescue
-      #   puts'--------------------------qq error while get pre urls start--------------------------'
-      #   puts @path
-      #   puts'--------------------------qq error while get pre urls end  --------------------------'
-      #   urls << {url:nil,title:nil,type:nil}
-      # end
-
+      res['video_play_list']['playlist'].each do |obj|
+        urls << {url:obj['url'],title:obj['title'],type:'预告片'}
+      end
       return urls
     end
   
@@ -134,10 +120,10 @@ module MovieSpider
         res  = res['data']['subject'][0]['option']
         return [res[0]['selected'],res[1]['selected']]
       rescue
-        puts '-----------------tecent  error while get up and down count start -----------------'
-        puts "#{@path}  没有顶和踩的数据"
-        puts uri
-        puts '-----------------tecent  error while get up and down count start -----------------'
+        @logger.info '-----------------tecent  error while get up and down count start -----------------'
+        @logger.info "#{@path}  没有顶和踩的数据"
+        @logger.info uri
+        @logger.info '-----------------tecent  error while get up and down count start -----------------'
         return [0,0]
       end
            

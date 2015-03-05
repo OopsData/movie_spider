@@ -1,10 +1,11 @@
 require 'micro_spider'
-
+require 'logger'
 module MovieSpider
 
   class Youku
     def initialize(path)
       @path = path.gsub(/\s+/,'')
+      @logger = Logger.new(STDOUT)
     end
   
     # 获取每一个播放页面的相关信息
@@ -12,16 +13,16 @@ module MovieSpider
       infos = []
       urls  = get_play_url
       urls.each do |hash|
-        puts "=============>  runing youku  #{hash[:url]} <=============="
-        begin
+        @logger.info  "=============>  runing youku  #{hash[:url]} <=============="
+        #begin
           data = start_crawl(hash)
           infos << data if data.present?          
-        rescue
-          puts'--------------------------youku error while executing next url start--------------------------'
-          puts hash[:url]
-          puts'--------------------------youku error while executing next url end  --------------------------'
-          next
-        end 
+        # rescue
+        #   @logger.info '--------------------------youku error while executing next url start--------------------------'
+        #   @logger.info  hash[:url]
+        #   @logger.info '--------------------------youku error while executing next url end  --------------------------'
+        #   next
+        # end 
       end
       infos.delete_if{|e| e[:url] == nil }
       return infos
@@ -135,7 +136,8 @@ module MovieSpider
   
     # 获取视频的评论数量
     def get_comments_count(vid)
-      uri  = URI('http://comments.youku.com/comments/~ajax/getStatus.html?__ap={%22videoid%22:%22' + vid.to_s + '%22}')
+      url = "http://comments.youku.com/comments/~ajax/getStatus.html?__ap=%7B%22videoid%22:%22#{vid}%22%7D"
+      uri = URI(url)
       page = get_page(uri)
       if page.present?
         cnt = JSON.parse(page.body)['total']
@@ -172,12 +174,12 @@ module MovieSpider
       uri = URI(url)
       begin
         ##TODO 如果请求频繁的话有可能会被拒绝,可以在这里加上sleep
-        sleep(1)
+        sleep(1.5)
         page = agent.get uri
       rescue
-        puts '-------------youku get agent.page error start -------------'
-        puts url
-        puts '-------------youku get agent.page error end -------------'
+        @logger.info  '-------------youku get agent.page error start -------------'
+        @logger.info  url
+        @logger.info  '-------------youku get agent.page error end -------------'
       end
       return page
     end    

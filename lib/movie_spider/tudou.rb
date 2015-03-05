@@ -1,10 +1,11 @@
 require 'micro_spider'
-
+require 'logger'
 module MovieSpider
 
   class Tudou
     def initialize(path)
       @path = path.gsub(/\s+/,'')
+      @logger = Logger.new(STDOUT)
     end
   
     # 获取每一个播放页面的相关信息
@@ -12,13 +13,13 @@ module MovieSpider
       infos = []
       urls  = get_play_url
       urls.each do |url|
-        puts "=============>  runing tudou  #{url}  <=============="
+        @logger.info  "=============>  runing tudou  #{url}  <=============="
         begin
           infos << start_crawl(url)
         rescue
-          puts'--------------------------tudou error while executing next url start--------------------------'
-          puts url
-          puts'--------------------------tudou error while executing next url end  --------------------------'
+          @logger.info '--------------------------tudou error while executing next url start--------------------------'
+          @logger.info  url
+          @logger.info '--------------------------tudou error while executing next url end  --------------------------'
           next
         end
       end
