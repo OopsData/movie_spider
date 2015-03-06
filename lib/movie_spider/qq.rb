@@ -19,9 +19,9 @@ module MovieSpider
           data = start_crawl(hash)
           infos << data if data.present?          
         rescue
-          puts'--------------------------qq error while executing next url start--------------------------'
+          @logger.info '--------------------------qq error while executing next url start--------------------------'
           @logger.info hash[:url]
-          puts'--------------------------qq error while executing next url end  --------------------------'
+          @logger.info '--------------------------qq error while executing next url end  --------------------------'
           next
         end
       end
