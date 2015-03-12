@@ -129,7 +129,7 @@ module MovieSpider
             expired_links.each do |el|
               count_hash[el] += 1
             end
-            exist = b.select{|k,v| v > 10}
+            exist = count_hash.select{|k,v| v > 10}
             if exist
               break  
             end
