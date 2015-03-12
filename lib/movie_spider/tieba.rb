@@ -81,6 +81,8 @@ module MovieSpider
     end
 
     def start_crawl(agent,links)
+      count_hash = Hash.new(0)
+      expired_links = [] #盛放每次发现过期链接时,当时的link个数
       results = []
       focus   = 0
       @logger.info  "^^^^^^^^^^^^^^^^^^^^^^^^  links  #{links.length}  个 ^^^^^^^^^^^^^^^^^^^^^^^^ "
@@ -88,6 +90,7 @@ module MovieSpider
         begin
           t1             =  Time.now
           hash           =  Hash.new(0)
+          tid            =  link
           link           =  'http://tieba.baidu.com/p/' + link
           page           =  agent.get(link)
           focus          =  page.search('.card_menNum').text
@@ -103,7 +106,7 @@ module MovieSpider
             # 图册精选
             hash[:comment] = page.search('.pb_footer').search('.l_reply_num[2]').search('span[1]').text()
             kw   = @path.split(/kw=/).last.split(/&/).first
-            uri  = URI::decode("http://tieba.baidu.com/photo/g/bw/picture/list?kw=#{kw}&alt=jview&rn=200&tid=3077324289&pn=1&ps=161&pe=200&wall_type=v&_=#{Time.now.to_i}")
+            uri  = URI::decode("http://tieba.baidu.com/photo/g/bw/picture/list?kw=#{kw}&tid=#{tid}")
             page = agent.get(uri)
             json = JSON.parse(page.body)
             hash[:title]   = json['data']['title'].encode('utf-8','gbk')
@@ -117,9 +120,19 @@ module MovieSpider
             t2             =  Time.now
             results        << hash
             @logger.info hash.inspect
-            @logger.info "============>耗时: #{t2 - t1} 秒《=============="          
+            @logger.info "============>耗时: #{t2 - t1} 秒  results #{results.length} 个 《=============="          
           else
-            @logger.info "****************时间早于 2014-04-01 00:00   results #{results.length} 个*****************"
+            # expired_links 每次发现一个过期的帖子就存放一个当时链接个数,如果发有连续10个数字相同,则表示已经到达了2014-04-01这个点,
+            # 以后的循环就可以终止了
+            expired_links << results.length 
+            @logger.info "****************时间早于 2014-04-01 00:00   过期个数 #{expired_links.length} 个*****************"
+            expired_links.each do |el|
+              count_hash[el] += 1
+            end
+            exist = b.select{|k,v| v > 10}
+            if exist
+              break  
+            end
           end
         rescue
           @logger.info "============> #{link}   出现错误 已跳过 《=============="
