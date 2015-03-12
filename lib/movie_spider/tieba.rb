@@ -126,6 +126,7 @@ module MovieSpider
           next
         end
       end
+      links = [] #释放内存
       return [focus,results]
     end
   end
