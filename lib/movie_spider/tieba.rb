@@ -74,7 +74,7 @@ module MovieSpider
           end
         end
         s2 = Time.now
-        @logger.info "************** 链接 #{uri} 获得 #{links.length} 个 url  耗时: #{s2 - s1 } 秒 **************"
+        @logger.info "************** 链接 #{URI.decode(uri)} 获得 #{links.length} 个 url  耗时: #{s2 - s1 } 秒 **************"
       end
       return links
     end
@@ -82,7 +82,7 @@ module MovieSpider
     def start_crawl(agent,links)
       results = []
       focus   = 0
-      @logger.info  "^^^^^^^^^^^^^^^^^^^^^^^^  links  #{links.length}  个 "
+      @logger.info  "^^^^^^^^^^^^^^^^^^^^^^^^  links  #{links.length}  个 ^^^^^^^^^^^^^^^^^^^^^^^^ "
       links.each do |link|
         begin
           t1             =  Time.now
