@@ -65,10 +65,11 @@ module MovieSpider
             hash       = Hash.new(0)
             right_list = li.search('.threadlist_li_right')
             link       = right_list.search('.threadlist_lz .threadlist_title a.j_th_tit').attr('href').value
-            link       = 'http://tieba.baidu.com' + link
+            #link       = 'http://tieba.baidu.com' + link
+            link       = link.split(/\/p\//).last
             links      << link
             t2         = Time.now
-            @logger.info "---------获取一条链接耗时: #{t2 - t1} 秒   #{link}  ----------"
+            @logger.info "---------获取一条链接耗时: #{t2 - t1} 秒   #{'http://tieba.baidu.com/p/' + link}  ----------"
           rescue
             @logger.info "---------获取链接时出错 已跳过 ------------"
           end
@@ -87,6 +88,7 @@ module MovieSpider
         begin
           t1             =  Time.now
           hash           =  Hash.new(0)
+          link           =  'http://tieba.baidu.com/p/' + link
           page           =  agent.get(link)
           focus          =  page.search('.card_menNum').text
           ag_container   =  page.search('#ag_container')
