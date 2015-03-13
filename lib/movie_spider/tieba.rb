@@ -20,6 +20,10 @@ module MovieSpider
       agent   = get_agent
       links   = get_links(agent)
       results = start_crawl(agent,links)
+      @logger.info("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+      @logger.info(results.first)
+      @logger.info(results.last.length)
+      @logger.info("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
       return results
     end
 
@@ -65,7 +69,6 @@ module MovieSpider
             hash       = Hash.new(0)
             right_list = li.search('.threadlist_li_right')
             link       = right_list.search('.threadlist_lz .threadlist_title a.j_th_tit').attr('href').value
-            #link       = 'http://tieba.baidu.com' + link
             link       = link.split(/\/p\//).last
             links      << link
             t2         = Time.now
@@ -81,7 +84,6 @@ module MovieSpider
     end
 
     def start_crawl(agent,links)
-      count_hash = Hash.new(0)
       expired_links = [] #盛放每次发现过期链接时,当时的link个数
       results = []
       focus   = 0
@@ -122,16 +124,20 @@ module MovieSpider
             @logger.info hash.inspect
             @logger.info "============>耗时: #{t2 - t1} 秒  results #{results.length} 个 《=============="          
           else
-            # expired_links 每次发现一个过期的帖子就存放一个当时链接个数,如果发有连续10个数字相同,则表示已经到达了2014-04-01这个点,
+            # expired_links 每次发现一个过期的帖子就存放一个当时链接个数,如果发有连续50个数字相同,则表示已经到达了2014-04-01这个点,
             # 以后的循环就可以终止了
             expired_links << results.length 
+            count_hash = Hash.new(0)
             @logger.info "****************时间早于 2014-04-01 00:00   过期个数 #{expired_links.length} 个*****************"
             expired_links.each do |el|
               count_hash[el] += 1
             end
-            exist = count_hash.select{|k,v| v > 10}
-            if exist
-              break  
+            exist = count_hash.select{|k,v| v > 50}
+            @logger.info('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
+            @logger.info(exist.length)
+            @logger.info('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
+            if exist.length > 0
+              break
             end
           end
         rescue
@@ -139,8 +145,8 @@ module MovieSpider
           next
         end
       end
-      links = [] #释放内存
-      return [focus,results]
+      
+      return [focus.scan(/\d+/).join,results]
     end
   end
 end
