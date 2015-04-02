@@ -32,9 +32,9 @@ module MovieSpider
 
     def get_play_url
       post_url    = get_post_url
-      prev_url    = get_urls('prev')
-      feature_url = get_urls('feature')
-      mv_url      = get_urls('mv')
+      prev_url    = get_urls('prev') || []
+      feature_url = get_urls('feature') || []
+      mv_url      = get_urls('mv') || []
       urls        = (post_url + prev_url + feature_url + mv_url).uniq
       return urls
     end
