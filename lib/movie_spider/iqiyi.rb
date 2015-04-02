@@ -178,7 +178,12 @@ module MovieSpider
       threads.each { |thr| thr.join }
 
       if page.present?
-        cnt  = page.body.split('}],"count":').last.split('').first.to_i
+        begin
+          cnt  = page.body.split('}],"count":').last.split('').first.to_i
+        rescue
+          cnt = 0
+        end
+         
       else
         cnt  = 0
       end
