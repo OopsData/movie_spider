@@ -1,4 +1,5 @@
-require 'micro_spider'
+#require 'micro_spider'
+require 'mechanize'
 require 'logger'
 module MovieSpider
   class Tieba
@@ -28,7 +29,16 @@ module MovieSpider
     end
 
     def get_agent
-      agent = Mechanize.new
+      # agent = Mechanize.new
+      agent = Mechanize.new do |a| 
+        a.follow_meta_refresh = true
+        a.keep_alive = false
+        a.ignore_bad_chunking = true
+        a.user_agent_alias = 'Mac Safari'
+        a.gzip_enabled = false
+      end
+
+
       if File.exist?(@file)
         mtime = File.mtime(@file)
         ntime = Time.now
@@ -55,12 +65,23 @@ module MovieSpider
         @limit = page.link_with(:text => '尾页').href.split(/pn=/).last.to_i
       end
       0.step(@limit,50).each do |n|
+      # 90000.step(@limit,50).each do |n|
         s1    = Time.now
         uri   = URI::encode(@path)
         if n > 0
           uri = "#{uri}&pn=#{n}"
         end
-        page  = agent.get(uri)
+        begin
+          page  = agent.get(uri)
+        rescue
+          sleep(3)
+          begin
+            page  = agent.get(uri)  
+          rescue
+            next
+          end
+        end
+        
         
         lis   = page.search('li.j_thread_list .t_con')
         lis.each do |li|
@@ -80,6 +101,7 @@ module MovieSpider
         s2 = Time.now
         @logger.info "************** 链接 #{URI.decode(uri)} 获得 #{links.length} 个 url  耗时: #{s2 - s1 } 秒 **************"
       end
+
       return links
     end
 
@@ -97,6 +119,7 @@ module MovieSpider
           page           =  agent.get(link)
           focus          =  page.search('.card_menNum').text
           ag_container   =  page.search('#ag_container')
+
           unless ag_container.present?
             hash[:title]   =  page.search('.core_title_txt').text.gsub(/\s+/,'')
             hash[:comment] =  page.search('.pb_footer ul.l_posts_num li[2]').search('span[1]').text
@@ -104,19 +127,20 @@ module MovieSpider
             info           =  JSON.parse(info)
             hash[:author]  =  info['author']['user_name']
             hash[:created] =  info['content']['date']
+            unless hash[:created].present?
+              hash[:created] = page.search('#j_p_postlist .l_post:first').search('.j_reply_data').text
+            end
           else
             # 图册精选
             hash[:comment] = page.search('.pb_footer').search('.l_reply_num[2]').search('span[1]').text()
-            kw   = @path.split(/kw=/).last.split(/&/).first
-            uri  = URI::decode("http://tieba.baidu.com/photo/g/bw/picture/list?kw=#{kw}&tid=#{tid}")
+            kw   = @path.split(/kw=/).last.split(/&/).first   
+            uri  = URI::decode("http://tieba.baidu.com/photo/g/bw/picture/list?kw=#{kw}&tid=#{tid}&alt=jview&rn=200pn=1&ps=1&pe=40&info=1&_=#{Time.now}")
             page = agent.get(uri)
             json = JSON.parse(page.body)
             hash[:title]   = json['data']['title'].encode('utf-8','gbk')
             hash[:author]  = json['data']['user_name'].encode('utf-8','gbk')
             hash[:created] = Time.at(json['data']['update_time']).strftime('%Y-%m-%d %H:%I:%S')         
           end
-
-
           # 如果发表的日期在2014年4月1日之后,则收录该信息,此举是为了获得2014年4月1日以后发表的帖子
           if  Time.parse("#{hash[:created]}") >= Time.parse('2014-04-01 00:00')
             t2             =  Time.now
@@ -140,7 +164,8 @@ module MovieSpider
               break
             end
           end
-        rescue
+        rescue 
+          @logger.info "error:#{$!} at:#{$@}"
           @logger.info "============> #{link}   出现错误 已跳过 《=============="
           next
         end

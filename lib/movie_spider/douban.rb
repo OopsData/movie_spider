@@ -1,5 +1,5 @@
-require 'micro_spider'
-
+#require 'micro_spider'
+require 'mechanize'
 module MovieSpider
   class Douban
     def initialize(path)
@@ -31,8 +31,11 @@ module MovieSpider
     end
 
     def get_page(uri)
-      agent = Mechanize.new
-      agent.user_agent_alias = 'Mac Safari'
+      agent = Mechanize.new do |a| 
+        #a.keep_alive = false
+        a.ignore_bad_chunking = true
+        a.user_agent_alias = 'Mac Safari'
+      end       
       uri = URI("#{uri}")
       page = agent.get uri
       return page    	

@@ -1,4 +1,5 @@
-require 'micro_spider'
+#require 'micro_spider'
+require 'mechanize'
 require 'logger'
 module MovieSpider
 
@@ -128,14 +129,25 @@ module MovieSpider
 
     def get_page(url)
       url  = url.to_s
-      agent = Mechanize.new
-      agent.user_agent_alias = 'Mac Safari'
+      agent = Mechanize.new do |a| 
+        #a.keep_alive = false
+        a.ignore_bad_chunking = true
+        a.user_agent_alias = 'Mac Safari'
+      end 
+
       page = nil
       url  = url.gsub(/\s+/,'')
       uri = URI(url)
       #TODO 如果请求频繁的话有可能会被拒绝,可以在这里加上sleep
-      sleep(1)
-      page = agent.get uri
+      # sleep(1)
+      begin 
+        page = agent.get uri  
+      rescue
+        @logger.info  '-------------tudou get agent.page error start -------------'
+        @logger.info  url
+        @logger.info  '-------------tudou get agent.page error end -------------'
+      end
+      
       return page
     end
     # 开始抓取
