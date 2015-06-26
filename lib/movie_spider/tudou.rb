@@ -1,4 +1,3 @@
-#require 'micro_spider'
 require 'mechanize'
 require 'logger'
 module MovieSpider
@@ -7,152 +6,148 @@ module MovieSpider
     def initialize(path)
       @path = path.gsub(/\s+/,'')
       @logger = Logger.new(STDOUT)
+      @agent   = nil
+      @results = []       
     end
-  
-    # 获取每一个播放页面的相关信息
-    def get_page_info
-      infos = []
-      urls  = get_play_url
-      urls.each do |url|
-        @logger.info  "=============>  runing tudou  #{url}  <=============="
-        begin
-          infos << start_crawl(url)
-        rescue
-          @logger.info '--------------------------tudou error while executing next url start--------------------------'
-          @logger.info  url
-          @logger.info '--------------------------tudou error while executing next url end  --------------------------'
-          next
+
+    def start_crawl
+      @agent = get_agent
+      if  @path.include?('albumcover')
+        # 官方介绍页
+        urls = collect_urls
+        urls.each do |hash|
+          result   = get_play_info(hash)
+          @results << result if result.present?
         end
+      else
+        # 播放页面 由于没有官方页面,进入此处的url都是零星搜集来的,所以在这里将这些url的视频全部当做是预告片视频
+        @results = get_play_info({url:@path,type:'预告片'})
       end
-      return infos
+      return @results
     end
-  
-    #到土豆网的电影详情页面去抓取所有能播放的url,这些url包括预告和花絮
-    def get_play_url
-      urls = []
-      post_url    = get_post_url
-      page = get_prev_feature_response
-      if page.present?
-        prev_url    = get_prev_url(page)
-        feature_url = get_feature_url(page)
-        urls        = (post_url + prev_url + feature_url).uniq
+
+    def get_agent
+      @agent = Mechanize.new do |a|
+        #a.keep_alive = false
+        a.ignore_bad_chunking = true
+        a.user_agent_alias = 'Mac Safari'
       end
+    end
+
+    def get_page(url)
+      page   = nil
+      url    = URI.encode(url.to_s.gsub(/\s+/,''))
+      begin
+        page = @agent.get url
+      rescue
+        @logger.info  '-------------tudou get agent.page error start -------------'
+        @logger.info  @logger.info "error:#{$!} at:#{$@}"
+        @logger.info  '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
+        @logger.info  URI.decode(url)
+        @logger.info  '-------------tudou get agent.page error end -------------'
+      end
+      return page
+    end
+
+    # 收集url
+    def collect_urls
+      post_url    = get_post_url
+      other_url   = get_other_url
+      urls        = (post_url.to_a + other_url).uniq
       return urls
     end
-  
+
     # 获取介绍页海报处的url
     def get_post_url
-      return unless @path.include?('albumcover')
       res = []
-      uri  = URI::decode(@path)
-      page = get_page(uri)
+      page = get_page(@path)
       if page.present?
-        res = [page.search('.pic a').attr('href').value]
+        tmp = {url:page.search('.cover_img .pic a').attr('href').value}
+        if page.search('.play_btn a').text().match(/播放正片/)
+          tmp.merge!({type:'正片'})
+        else
+          tmp.merge!({type:'预告片'})
+        end
+        res << tmp
       end
       return res
     end
-  
-    # 获取预告片的链接地址  
-    def get_prev_url(page)
+
+    # 获取预告片及花絮地址
+    def get_other_url
+      code = @path.split('/').last.split('.').first
+      uri  = URI("http://www.tudou.com/albumcover/albumdata/getOtherAlbumItemInfoes.action?acode=#{code}")
+      page = get_page(uri)
       prev_url = []
       JSON.parse(page.body)['previewsPlaylistItems'].each do |item|
-        prev_url << item['otherPlayUrl']
+        prev_url << {url:item['otherPlayUrl'],type:'预告片'}
       end
-      return prev_url
-    end
-  
-    # 获取花絮的链接地址
-    def get_feature_url(page)
       feature_url = []
       JSON.parse(page.body)['featurettesItems'].each do |item|
-        feature_url << item['otherPlayUrl']
+        feature_url << {url:item['otherPlayUrl'],type:'花絮'}
       end
-      return  feature_url 
+      return (prev_url + feature_url).uniq
     end
-  
-    # 生成爬虫实例
-    def generate_spider
-      spider = MicroSpider.new
-      spider.delay = 2
-      return spider 
+
+    #获取每一个播放页面的相关信息  
+    def get_play_info(hash_data)
+      if hash_data[:url].present?
+        hash = Hash.new(0)
+        res  = get_basic_doc(hash_data[:url])
+        if res.present?
+          vid  = get_video_id(res)
+          if vid.present?
+            hash[:type]          = hash_data[:type]
+            hash[:title]         = res.search('#videoKw').text.gsub(/\s+/,'')
+            hash[:url]           = hash_data[:url]
+            other_info           = get_other_info(vid)
+            hash[:commentNum]    = other_info.first
+            hash[:playNum]       = other_info.second
+            hash[:upNum]         = other_info.third
+            hash[:downNum]       = other_info.fourth
+          end
+        end
+        @logger.info hash.inspect
+        @logger.info '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
+        return  hash
+      end      
     end
-  
-    # 获取预告片及花絮的链接地址
-    def get_prev_feature_response
-      return unless @path.include?('albumcover')
-      code = @path.split('/').last.split('.').first
-      uri = URI("http://www.tudou.com/albumcover/albumdata/getOtherAlbumItemInfoes.action?acode=#{code}")
+
+    # 获取播放页面的doc
+    def get_basic_doc(url)
+      uri = URI("#{url}")
       res = get_page(uri)
       return res
     end
-  
-    # 拿到视频id并开始抓取数据
-    def get_play_info(url)
-      page  = get_page(url)
-      if page.present?
-        title = page.search('#videoKw').text.gsub(/\s+/,'')
-        iid   = nil
-        page.search('script').each do |script|
-          unless script.attr('src').present?
-            if script.content.include?('var pageConfig')
-              script.content.split(',').each do |sc|
-                if sc.match(/iid:/)  
-                  iid = sc.scan(/\d+/).first
-                end
+
+    def get_video_id(res)
+      iid = nil
+      res.search('script').each do |script|
+        unless script.attr('src').present?
+          if script.content.include?('var pageConfig')
+            script.content.split(',').each do |sc|
+              if sc.match(/iid:/)  
+                iid = sc.scan(/\d+/).first
               end
             end
           end
         end
-        return get_play_num(url,iid,title)
-      else
-        return nil
       end
+      return iid
     end
-    # 返回抓取数据
-    def get_play_num(url,iid,title)
-      hash = Hash.new(0)
-      hash[:url]   = url
-      hash[:type]  = url.include?('albumplay') ? '正片' : '预告'
-      hash[:title] = title
-      uri = URI("http://www.tudou.com/crp/itemSum.action?jsoncallback=page_play_model_itemSumModel__find&app=6&showArea=true&iabcdefg=#{iid}&uabcdefg=0&juabcdefg=019ev33tal293i")
-      res = get_page(uri)
+
+    def get_other_info(vid)
+      url = "http://www.tudou.com/crp/itemSum.action?iabcdefg=#{vid}&uabcdefg=0"
+      res = get_page(url)
       if res.present?
-        res.body.split(',').each do |num|
-          hash[:commentNum] =  num.scan(/\d+/).first  if num.match(/commentNum/)
-          hash[:upNum]      =  num.scan(/\d+/).first  if num.match(/digNum/)
-          hash[:playNum]    =  num.scan(/\d+/).first  if num.match(/playNum/)
-          hash[:downNum]    =  0
-        end
+        result = []
+        info   =  JSON.parse res.body
+        result << info['commentNum']
+        result << info['digNum']
+        result << info['playNum']
+        result << 0 #土豆没有踩
       end
-      return hash
-    end
-
-    def get_page(url)
-      url  = url.to_s
-      agent = Mechanize.new do |a| 
-        #a.keep_alive = false
-        a.ignore_bad_chunking = true
-        a.user_agent_alias = 'Mac Safari'
-      end 
-
-      page = nil
-      url  = url.gsub(/\s+/,'')
-      uri = URI(url)
-      #TODO 如果请求频繁的话有可能会被拒绝,可以在这里加上sleep
-      # sleep(1)
-      begin 
-        page = agent.get uri  
-      rescue
-        @logger.info  '-------------tudou get agent.page error start -------------'
-        @logger.info  url
-        @logger.info  '-------------tudou get agent.page error end -------------'
-      end
-      
-      return page
-    end
-    # 开始抓取
-    def start_crawl(url)
-      data = get_play_info(url)
+      return result
     end
    end
 end

@@ -1,4 +1,3 @@
-#require 'micro_spider'
 require 'mechanize'
 require 'logger'
 module MovieSpider
@@ -7,58 +6,79 @@ module MovieSpider
     def initialize(path)
       @path = path.gsub(/\s+/,'')
       @logger = Logger.new(STDOUT)
+      @agent   = nil
+      @results = []
     end
-  
-    # 获取每一个播放页面的相关信息
-    def get_page_info
-      infos = []
-      urls  = get_play_url
-      urls.each do |hash|
-        next unless hash[:url].include?('http://www.iqiyi.com')
-        @logger.info "=============>  runing iqiyi  #{hash[:url]} <=============="
-        data = start_crawl(hash)
-        infos << data if data.present?
+
+    def start_crawl
+      @agent = get_agent
+      if  @path.include?('lib')
+        # 官方介绍页
+        urls = collect_urls
+        urls.each do |hash|
+          result   = get_play_info(hash)
+          @results << result if result.present?
+        end
+      else
+        # 播放页面 由于没有官方页面,进入此处的url都是零星搜集来的,所以在这里将这些url的视频全部当做是预告片视频
+        @results = get_play_info({url:@path,type:'预告片'})
       end
-      infos.delete_if{|e| e[:url] == nil }
-      return infos
+      return @results
     end
-  
-    def get_play_url
-      urls     = []
-      page     = get_page(@path)
-      if page.present?
-        post_url = get_post_url(page)
-        # 这里暂时去掉了最新资讯的爬取
-        # news_url = get_urls(page,'news')
-        prev_url = get_urls(page,'prev')
-        #urls     = (post_url + news_url + prev_url).uniq
-        urls     = (post_url + prev_url).uniq
+
+    def get_agent
+      @agent = Mechanize.new do |a| 
+        #a.keep_alive = false
+        a.ignore_bad_chunking = true
+        a.user_agent_alias = 'Mac Safari'
       end
+    end
+
+    def get_page(url)
+      page   = nil
+      url    = url.to_s.gsub(/\s+/,'')
+      begin
+        page = @agent.get url
+      rescue
+        @logger.info  '-------------iqiyi get agent.page error start -------------'
+        @logger.info  @logger.info "error:#{$!} at:#{$@}"
+        @logger.info  '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
+        @logger.info  URI.decode(url)
+        @logger.info  '-------------iqiyi get agent.page error end -------------'
+      end
+      return page
+    end 
+
+    # 收集url
+    def collect_urls
+      post_url      = get_post_url  # 海报处url
+      prev_url      = get_urls('prev')
+      urls          = (post_url.to_a + prev_url.to_a).uniq
       return urls
     end
-  
+
     # 获取介绍页海报处的url
-    def get_post_url(page)
+    def get_post_url
       return unless @path.include?('lib')
+      uri  = URI(@path)
+      page = get_page(uri)
+      res = [{url:nil,type:nil}]
+      if page.present?
         if page.search('.search-btn-green').text.match(/播放/)
           type = '正片'
         else
           type = '预告片'
-        end
-        res = [{url:page.search('.result_pic  a').attr('href').to_s,type:type}]
+        end    
+      end
+      res = [{url:page.search('.search-btn-green').attr('href').to_s,type:type}]
       return res
     end
-  
-  
-    # 生成爬虫实例
-    def generate_spider
-      spider = MicroSpider.new
-      spider.delay = 2
-      return spider 
-    end
-  
+
     # 获取预告片及花絮及mv的链接地址
-    def get_urls(page,type)
+    def get_urls(type)
+      return unless @path.include?('lib')
+      uri  = URI(@path)
+      page = get_page(uri)      
       title = page.search('.main_title > a').text
       entityId = page.search('.site-main-outer .site-main-inner').search('div[data-widget-movlbtab="movlbtab"]').attr('data-movlbtab-id').value
       case type
@@ -69,53 +89,71 @@ module MovieSpider
       end
       urls   = []
       1.upto(30).each do |page|
-        uri  = uri + "&page=#{page}"
+        url  = uri
+        url  = url + "&page=#{page}"
         page = get_page(uri)
         if page.present?
-          body = JSON.parse(page.body)['data']['html']
-          html_doc = Nokogiri::HTML(body)
-          if html_doc.search('.site-piclist_info_title a')
-            html_doc.search('.site-piclist_info_title a').each do |link|
-              href = link.attr('href')
-              txt  = link.text
-              if href.start_with?('http') && txt.include?(title)
-                urls << {url:href,type:'预告片'} unless urls.include?(href)
-              end
-            end            
-          end        
+          body = JSON.parse(page.body)       
+          if body && body.length > 0 && body['data']             
+            body = body['data']['html']
+            html_doc = Nokogiri::HTML(body)            
+            if html_doc.search('.site-piclist_info_title a').length > 0               
+              html_doc.search('.site-piclist_info_title a').each do |link|
+                href = link.attr('href')
+                txt  = link.text                  
+                if href.start_with?('http') && txt.include?(title)               
+                  type = '预告片' if url.include?('p.fjsonp')
+                  type = '花絮'   if url.include?('l.fjsonp')
+                  urls << {url:href,type:type} unless urls.map{|e| e[:url]}.include?(href)
+                end
+              end            
+            end                
+          end
         end
       end
       return urls
     end
-  
-    # 拿到视频id并开始抓取数据
+
     def get_play_info(hash_data)
       if hash_data[:url].present?
         hash = Hash.new(0)
         res  = get_basic_doc(hash_data[:url])
         vid  = get_video_id(res)
-        if vid.present?
+        if res.present?
           hash[:type]          = hash_data[:type]
           hash[:title]         = res.search('h1.mod-play-tit').text.gsub(/\s+/,'')
           hash[:url]           = hash_data[:url]
           hash[:upNum]         = get_up_down_count(vid).first
           hash[:downNum]       = get_up_down_count(vid).last
           hash[:playNum]       = get_play_count(vid)
-          hash[:commentNum]    = get_comments_count(res,vid)          
+          hash[:commentNum]    = get_comments_count(res,vid) 
+          @logger.info '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
+          @logger.info hash.inspect
+          @logger.info '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'                     
+          return  hash
         end
-        @logger.info hash.inspect
-        @logger.info('**********************************************')        
-        return hash
-      end
+      end   
     end
-  
+
     # 获取基本doc
     def get_basic_doc(url)
-      uri = URI(url)
-      res = get_page(uri)
+      url = url.gsub('%23','#')
+      res = get_page(url)
       return res
     end
-  
+
+    # 获取视频的id
+    def get_video_id(res)
+      vid = nil
+      if res.present?
+        flashbox = res.search('#flashbox')
+        if flashbox.present?
+          vid = res.search('#flashbox').attr('data-player-tvid').value
+        end
+      end
+      return vid
+    end
+
     # 获取顶数量
     def get_up_down_count(vid)
       uri  = "http://up.video.iqiyi.com/ugc-updown/quud.do?dataid=#{vid.to_s}&type=2"
@@ -131,108 +169,69 @@ module MovieSpider
       return [up,down]
     end
 
-    # 获取视频的id
-    def get_video_id(res)
-      vid = nil
-      if res.present?
-        flashbox = res.search('#flashbox')
-        if flashbox.present?
-          vid = res.search('#flashbox').attr('data-player-tvid').value
-        end
+    # 获取电影的播放量
+    def get_play_count(vid)
+      uri  = URI("http://cache.video.qiyi.com/jp/pc/#{vid}/")
+      page = get_page(uri)
+      if page.present?
+        return page.body.split(':').last.scan(/\d+/).first.to_i
+      else
+        return 0
       end
-      return vid
     end
-  
+
     # 获取视频的评论数量
     def get_comments_count(res,vid)
       # 0_329488600 组成: 0 由 页面 $('#qitancommonarea').attr('data-qitancomment-qitanid')
       # 后面部分就是参数vid
       # TODO
       # tvid216 由于目前 tvid还没有查找到，所以使用了一个比较笨的方法
-      pre   =res.search('#qitancommonarea').attr('data-qitancomment-qitanid').value
-      agent = Mechanize.new
-      agent.user_agent_alias = 'Mac Safari'
-      page  = nil
-      cnt   = 0
-      threads = []
-      page    = nil
-      #TODO
-      #一个专辑内的影片数量应该不会超过500,所以这里的tvid最大取到500
-
-      1.upto(5).each_with_index do |num,idx|
-        to   = (idx + 1) * 100
-        from = to - 99
-        threads << Thread.new{
-          from.upto(to).each do |t|
-            uri = URI("http://cmts.iqiyi.com/comment/tvid#{t}/#{pre}_#{vid}_hot?t=#{Time.now.to_i}")
-            begin
-              page = agent.get uri
-              break
-            rescue
-              next
-            end  
-          end 
-        }
+      begin
+        pre   = res.search('#qitancommonarea').attr('data-qitancomment-qitanid').value
+      rescue
+        pre   = nil  
       end
 
-      threads.each { |thr| thr.join }
+      cnt     = 0
 
-      if page.present?
-        begin
-          cnt  = page.body.split('}],"count":').last.split('').first.to_i
-        rescue
-          cnt = 0
+      if pre
+        agent = Mechanize.new
+        agent.user_agent_alias = 'Mac Safari'
+        page  = nil
+        cnt   = 0
+        threads = []
+        page    = nil
+  
+        1.upto(5).each_with_index do |num,idx|
+          to   = (idx + 1) * 100
+          from = to - 99
+          threads << Thread.new{
+            from.upto(to).each do |t|
+              uri = URI("http://cmts.iqiyi.com/comment/tvid#{t}/#{pre}_#{vid}_hot?t=#{Time.now.to_i}")
+              begin
+                page = agent.get uri
+                break
+              rescue
+                next
+              end  
+            end 
+          }
         end
-         
-      else
-        cnt  = 0
+  
+        threads.each { |thr| thr.join }
+  
+        if page.present?
+          begin
+            cnt  = page.body.split('}],"count":').last.split('').first.to_i
+          rescue
+            cnt = 0
+          end
+           
+        else
+          cnt  = 0
+        end
       end
       return cnt
     end
-  
-    # 获取电影的播放量
-    def get_play_count(vid)
-      uri  = URI("http://cache.video.qiyi.com/jp/pc/#{vid}/?callback=window.Q.__callbacks__.cbgdimt")
-      page = get_page(uri)
-
-      if page.present?
-        return page.body.split(':').last.scan(/\d+/).first
-      else
-        return 0
-      end
-    end
-    
-    # 开始抓取
-    def start_crawl(hash)
-      data = get_play_info(hash)
-    end
-
-    def get_page(url)
-      url  = url.to_s
-      # agent = Mechanize.new
-
-      agent = Mechanize.new do |a| 
-        a.ignore_bad_chunking = true
-        a.user_agent_alias = 'Mac Safari'
-      end
-      
-      page = nil
-      url  = url.gsub(/\s+/,'')
-      uri = URI(url)
-      #TODO 如果请求频繁的话有可能会被拒绝,可以在这里加上sleep 
-      begin 
-        page = agent.get uri  
-      rescue
-        @logger.info  '-------------iqiyi get agent.page error start -------------'
-        @logger.info  url
-        @logger.info '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
-        @logger.info "error:#{$!} at:#{$@}"
-        @logger.info  '-------------iqiyi get agent.page error end -------------'
-      end
-      return page
-    end    
   end
 end
-
-# iqiyi = MovieSpider::Iqiyi.new('http://www.iqiyi.com/lib/m_205027214.html')
-# iqiyi.get_page_info

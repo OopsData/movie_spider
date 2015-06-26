@@ -7,6 +7,7 @@ require 'movie_spider/iqiyi'
 require 'movie_spider/baidu'
 require 'movie_spider/star'
 require 'movie_spider/tieba'
+require 'movie_spider/qqlive'
 module MovieSpider
   # Your code goes here...
 end
