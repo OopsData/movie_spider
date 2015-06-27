@@ -10,6 +10,9 @@ module MovieSpider
     def start_crawl
     	@agent = get_agent
     	get_comment_info
+    	@logger.info '&&&&&&&&&&&&&&&'
+    	@logger.info @results.length
+    	@logger.info '&&&&&&&&&&&&&&&'
     	return @results
     end	
 
@@ -20,12 +23,15 @@ module MovieSpider
       		result = page.body.gsub('topicList(','').gsub('})','}')
       		result = JSON.parse(result) 
       		if result["data"]
-      			cursor  = result["data"]["cursor"]
-      			hasnext = cursor['hasnext']
-      			nex     = cursor['next']
-      			post   = result["data"]["post"]
-      			param  = {}
+      			cursor   = result["data"]["cursor"]
+      			hasnext  = cursor['hasnext']
+      			nex      = cursor['next']
+      			post     = result["data"]["post"]
+      			
+      			
       			post.each do |po|
+      				param    = {}
+      				param['postid']      =  po['postid']
       				param['title']       =  po['custom']
       				param['content']     =  po['content']
       				param['orireplynum'] =  po['orireplynum'].to_i
@@ -35,6 +41,7 @@ module MovieSpider
       				param['region']      =  po['userinfo']['region'] 
       				param['time']        =  Time.at(po['time'])
       				param['comments']    =  []
+
       				p1,p2 = po['orireplynum'].to_i.divmod(10)
       				if p2 > 0
       					pg = p1 + 1
@@ -44,12 +51,11 @@ module MovieSpider
       				1.upto(pg) do |i|
       					comment = get_reply_info(po['postid'],i)  
       					param['comments'].concat(comment)
-      				end
-      				param['orireplynum'] = param['comments'].length
+      				end  
+      				param['orireplynum'] = param['comments'].length    					
       				@results << param
       				@logger.info "#{po['postid']} --- #{param['title']} : 评论量： #{param['comments'].length}"
-      				# @logger.info param.inspect
-					# @logger.info "=============================================" 				
+					@logger.info "=============================================" 				
       			end
       		end
       		if hasnext.present?
@@ -67,17 +73,19 @@ module MovieSpider
     		result = page.body.gsub('mainComment(','').gsub('})','}')
     		result = JSON.parse(result)
     		if result['data']
-    			result['data']['comment'].each do |cmt|
-    				comment = {}
-    				comment['id'] = cmt['id']
-    				comment['time'] = Time.at(cmt['time'].to_i)
-    				comment['up'] = cmt['up']
-					comment['rep'] = cmt['rep']
-					comment['content'] = cmt['content']
-					comment['nick'] = cmt['userinfo']['nick']
-					comment['gender'] = cmt['userinfo']['gender']
-					comment['region'] = cmt['userinfo']['region']
-					comment_arr << comment
+    			if result['data']['comment'].present?
+    				result['data']['comment'].each do |cmt|
+    					comment = {}
+    					comment['id'] = cmt['id']
+    					comment['time'] = Time.at(cmt['time'].to_i)
+    					comment['up'] = cmt['up']
+						comment['rep'] = cmt['rep']
+						comment['content'] = cmt['content']
+						comment['nick'] = cmt['userinfo']['nick']
+						comment['gender'] = cmt['userinfo']['gender']
+						comment['region'] = cmt['userinfo']['region']
+						comment_arr << comment
+    				end    			
     			end
     		end
     	end
