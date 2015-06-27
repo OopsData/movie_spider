@@ -6,57 +6,154 @@ module MovieSpider
       @logger = Logger.new(STDOUT)
       @agent   = nil
       @results = []
+      @global_hash = {}
+      @first_level_ids = {}
     end
 
 
-    def get_comment_info(agent,cid,reqnum=10)
-      url    = "http://coral.qq.com/article/1010969500/comment?commentid=#{cid}&reqnum=#{reqnum}&tag=&callback=mainComment&_=#{Time.now.to_i}"
-      page   = get_page(url)
-      if page.present?
-        result = page.body.gsub('mainComment(','').gsub('})','}')
-        result = JSON.parse(result)
-        retnum = result['data']['retnum'].to_i
-        hasnext = result['data']['hasnext']
-        if retnum > 0          
-          first  = result['data']['first'] # 按时间倒序第一个，即时间值最大的那个
-          last   = result['data']['last']  # 按时间倒序最后一个，即时间值最小的那个
-          comment_arr = result['data']['commentid']
-          comment_arr = comment_arr.sort_by{|e| e['id']}
-          comment_arr.each do |cmt|
-            params = {
-              last_id:last,
-              cmt_id: cmt['id'],
-              up:cmt['up'],
-              rep:cmt['rep'],
-              time: Time.at(cmt['time'].to_i),
-              cont: cmt['content'],
-              target: cmt['targetid'],
-              nick: cmt['userinfo']['nick'],
-              gender: cmt['userinfo']['gender'],
-              region: cmt['userinfo']['region']
-            }
-            cmt_ids = @results.map{|hash| hash[:cmt_id]}
-            unless cmt_ids.include?(params[:cmt_id])
-              @results << params
-              @logger.info "=====共有 #{@results.length} 个评论====="
-            end
-          end
-          if hasnext
-            get_comment_info(agent,last,20)
-          end
-        end
-      else
-        @logger.info "------- comment_id 为 #{cid} 时 get  page  出错 -------"
-      end
-    end
+
+    # def abc(cid,reqnum=20,detail=nil)
+    #     url  = "http://video.coral.qq.com/article/1010969500/comment?commentid=#{cid}&reqnum=#{reqnum}&tag=&callback=mainComment&_=#{Time.now.to_i}"
+    #     page = get_page(url)
+    #     if page.present?
+    #       result = page.body.gsub('mainComment(','').gsub('})','}')
+    #       result = JSON.parse(result)
+    #       if result['data']
+    #         retnum = result['data']['retnum'].to_i
+    #         if retnum > 0
+    #           comment_arr = result['data']['commentid']
+    #           comment_arr = comment_arr.sort_by{|e| e['id']}
+    #           if detail
+
+    #           end
+    #           comment_arr.each do |cmt|
+    #             unless @global_hash.has_key?("#{cmt['id']}".to_sym)
+    #               unless detail
+    #                 @global_hash["#{cmt['id']}".to_sym] = true
+    #               end
+    #               params = {
+    #                 cmt_id: cmt['id'],
+    #                 up:cmt['up'],
+    #                 rep:cmt['rep'],
+    #                 time: Time.at(cmt['time'].to_i),
+    #                 cont: cmt['content'],
+    #                 nick: cmt['userinfo']['nick'],
+    #                 gender: cmt['userinfo']['gender'],
+    #                 region: cmt['userinfo']['region']
+    #               }
+    #               @results << params
+    #               @logger.info "-------- 共有 #{@results.length} 个评论 --------"  
+    #             else
+    #               @logger.info "******** commentid为#{cid} 查询到id为#{cmt['id']} 的评论已经存在 评论于 #{Time.at(cmt['time'].to_i)} ********  共有 #{@results.length} 个评论  共有#{@global_hash.length}个commentid  共有#{@global_hash.select{|k,v| v == true}.length}个没有跑的commentid"
+    #             end
+    #           end
+    #           last = result['data']['last']
+    #           abc(last,20,detail)
+    #         else
+    #           if @global_hash.has_value?(true)
+    #             wait_hash = @global_hash.select{|k,v| v == true}
+    #             wait_hash.each do |k,v|
+    #               @global_hash["#{k}".to_sym] = false
+    #               abc(k,20,'detail')
+    #             end
+    #           end
+    #         end
+    #       end
+    #     end
+    # end
+
+
 
 
     def start_crawl
       @agent = get_agent
-      cmtid = 0
-      get_comment_info(@agent,cmtid,10)
-      return @results
+      # cmtid = 0
+      cmtid = '6020555996958192638'
+      get_first_level_info(cmtid,20)
+      @logger.info  '------'
+      @logger.info @first_level_ids.keys.inspect
+      @logger.info  '------'
+      # @first_level_ids.keys.each do |cid|
+      #   get_inner_info(cid,50)
+      # end
     end
+
+    def get_first_level_info(cmtid,reqnum=50)
+      url  = "http://video.coral.qq.com/article/1010969500/comment?commentid=#{cmtid}&reqnum=#{reqnum}&tag=&callback=mainComment&_=#{Time.now.to_i}"
+      page = get_page(url)
+      if page.present?
+        result = page.body.gsub('mainComment(','').gsub('})','}')
+        result = JSON.parse(result)
+
+        if result['data']
+          retnum  = result['data']['retnum'].to_i
+          hasnext = result['data']['hasnext']
+          last    = result['data']['last'] 
+          @logger.info "=========#{last}======"
+          if retnum > 0
+            comment_arr = result['data']['commentid']
+            # comment_arr = comment_arr.sort_by{|e| e['id']}
+            comment_arr.each do |cmt|
+              unless @first_level_ids.has_key?("#{cmt['id']}")
+                @first_level_ids["#{cmt['id']}"] = true
+                params = {
+                  cmt_id: cmt['id'],
+                  up:cmt['up'],
+                  rep:cmt['rep'],
+                  time: Time.at(cmt['time'].to_i),
+                  cont: cmt['content'],
+                  nick: cmt['userinfo']['nick'],
+                  gender: cmt['userinfo']['gender'],
+                  region: cmt['userinfo']['region']
+                }
+                @results << params
+              end
+            end
+          end
+
+          # if hasnext
+          #   get_first_level_info(last,50)
+          # end
+        end        
+      end
+    end
+
+    def get_inner_info(cmtid,reqnum=50)
+      url  = "http://video.coral.qq.com/article/1010969500/comment?commentid=#{cmtid}&reqnum=#{reqnum}&tag=&callback=mainComment&_=#{Time.now.to_i}"
+      page = get_page(url)
+      result = page.body.gsub('mainComment(','').gsub('})','}')
+      result = JSON.parse(result) 
+      if result['data']
+          retnum  = result['data']['retnum'].to_i
+          hasnext = result['data']['hasnext']
+          last    = result['data']['last'] 
+          if retnum > 0
+            comment_arr = result['data']['commentid']
+            comment_arr = comment_arr.sort_by{|e| e['id']}
+            comment_arr.each do |cmt|
+              unless @inner_level_ids.has_key?("#{cmt['id']}")
+                @inner_level_ids["#{cmt['id']}"] = true
+                params = {
+                  cmt_id: cmt['id'],
+                  up:cmt['up'],
+                  rep:cmt['rep'],
+                  time: Time.at(cmt['time'].to_i),
+                  cont: cmt['content'],
+                  nick: cmt['userinfo']['nick'],
+                  gender: cmt['userinfo']['gender'],
+                  region: cmt['userinfo']['region']
+                }
+                @results << params
+              end
+            end
+          end                  
+      end     
+    end
+
+
+
+
+
 
     def get_agent
       @agent = Mechanize.new do |a|
