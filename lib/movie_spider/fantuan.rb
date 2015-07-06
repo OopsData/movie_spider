@@ -10,9 +10,6 @@ module MovieSpider
     def start_crawl
     	@agent = get_agent
     	get_comment_info
-    	@logger.info '&&&&&&&&&&&&&&&'
-    	@logger.info @results.length
-    	@logger.info '&&&&&&&&&&&&&&&'
     	return @results
     end	
 
@@ -51,11 +48,10 @@ module MovieSpider
       				1.upto(pg) do |i|
       					comment = get_reply_info(po['postid'],i)  
       					param['comments'].concat(comment)
-      				end  
-      				param['orireplynum'] = param['comments'].length    					
+      				end    					
       				@results << param
       				@logger.info "#{po['postid']} --- #{param['title']} : 评论量： #{param['comments'].length}"
-					@logger.info "=============================================" 				
+					    @logger.info "=============================================" 				
       			end
       		end
       		if hasnext.present?
@@ -79,12 +75,12 @@ module MovieSpider
     					comment['id'] = cmt['id']
     					comment['time'] = Time.at(cmt['time'].to_i)
     					comment['up'] = cmt['up']
-						comment['rep'] = cmt['rep']
-						comment['content'] = cmt['content']
-						comment['nick'] = cmt['userinfo']['nick']
-						comment['gender'] = cmt['userinfo']['gender']
-						comment['region'] = cmt['userinfo']['region']
-						comment_arr << comment
+						  comment['rep'] = cmt['rep']
+						  comment['content'] = cmt['content']
+						  comment['nick'] = cmt['userinfo']['nick']
+						  comment['gender'] = cmt['userinfo']['gender']
+						  comment['region'] = cmt['userinfo']['region']
+						  comment_arr << comment
     				end    			
     			end
     		end

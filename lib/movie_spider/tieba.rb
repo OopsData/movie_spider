@@ -3,33 +3,176 @@ require 'mechanize'
 require 'logger'
 module MovieSpider
   class Tieba
-    # path 表示要抓取的路径
+    # path 贴吧主页地址
     # file 表示从firefox导出的cookie.txt文件的绝对路径
-    # limit 表示每个明星要抓取的pn值,这个pn指的是每次翻页的时候改变的那个pn值
+    # limit 表示要抓取的pn值,这个pn指的是每次翻页的时候改变的那个pn值
     # limit 值约大,表示抓取数据的时间距离今天越远
-    # limit 如果想要抓取前一天的数据(爬虫后半夜开始爬取前一天的数据),可以将这个值改小
-    # 比如说1000,那么只收集昨天最新的1000条帖子的链接,如果前一天的帖子数量大于1000,那么前一天的数据可能会收集不完整,可以适当预估这个值来进行调整
-    # 如果前一天的贴子数量小于1000条的话，那么程序会自动判断日期,只会抓取前一天的数据,多余的数据将不抓取
+    # 比如说1000,那么只收集最活跃的1000条帖子的链接
     def initialize(path,file,limit=0)
       @path    = path
+      @agent   = nil
       @limit   = limit
       @file    = file
       @logger  = Logger.new(STDOUT)
+      @results = {}
     end
 
-    def get_info
-      agent   = get_agent
-      links   = get_links(agent)
-      results = start_crawl(agent,links)
-      @logger.info("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
-      @logger.info(results.first)
-      @logger.info(results.last.length)
-      @logger.info("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
-      return results
+
+    def start_crawl
+      @agent = get_agent
+      page   = @agent.get(@path)
+      get_post_info(page)
+      focus  = get_focus(page)
+      return {focus:focus,results:@results}
+    end
+
+    def get_focus(page)
+      focus = page.search('.j_post_num')[0].text().scan(/\d+/).join('').to_i
+    end
+
+    def get_post_info(page)
+      interview = page.search(".interviewZero dt.listTitleCnt span.listThreadTitle a")
+      if interview
+        interview_link = interview.attr('href')
+        get_detail(interview_link) 
+        @logger.info '--------------------------------完成一个主题的抓取--------------------------------'
+      end
+
+      page.search("#thread_list .j_thread_list .threadlist_title a").each do |link|
+        link =  "http://tieba.baidu.com" + link.attr('href')
+        get_detail(link)
+        @logger.info '--------------------------------完成一个主题的抓取--------------------------------'
+      end
+      @logger.info '**********************************  完成一页主题的抓取  **********************************'
+      next_page = page.link_with(:text => '下一页>')
+      if next_page
+        link    = next_page.href
+        pn      = link.to_s.split('pn=').last.to_i
+        if pn   <= @limit
+          page  = @agent.get(next_page.href)
+          get_post_info(page)
+        end
+      end      
+    end
+
+    def get_detail(link)
+      tid     = link.to_s.split('/p/').last
+      if tid.include?('?pn=')
+        tid   = tid.split('?pn=').first
+      end
+      begin
+        page    = @agent.get(link)
+      rescue
+        @logger.info  '-------------tieba agent get page error  at function get_detail -------------'
+        @logger.info  @logger.info "error:#{$!} at:#{$@}"
+        begin
+          page    = @agent.get(link)
+        rescue
+          @logger.info "------------  #{link} 链接 获取page 失败  ------------"
+        end
+      end
+
+      if page.present?
+        page404 = page.search('body.page404')
+        unless  page404.present?
+          posts  = [] # 盛放每页的post用
+          title  = page.search(".core_title_txt").attr('title').value
+          reply  = page.search(".pb_footer .l_posts_num:first .l_reply_num .red:first").text
+          basic  = {} # 盛放主题帖基本信息
+          posts  = [] # 盛放跟帖信息
+          page.search(".l_post").each do |post|
+            info     = JSON.parse(post.attr('data-field'))
+            cont     = post.search(".d_post_content_main .d_post_content").text.strip!
+            date     = info['content']['date']
+  
+            if info['content']['post_no'] == 1
+              #主题帖
+              basic[:author]        = {}
+              basic[:title]         = title
+              basic[:content]       = cont
+              basic[:date]          = date
+              basic[:reply]         = reply
+              basic[:author][:name] = info["author"]["user_name"]
+              basic[:author][:sex]  = info['author']['user_sex'] == 2 ? '女' : '男'
+              basic[:author][:level_id]   =  info["author"]["level_id"]
+              basic[:author][:level_name] =  info["author"]["level_name"]
+            else
+              #回复主题帖
+              reply_info = {}
+              reply_info[:author]      = info["author"]["user_name"] # 回复的作者
+              reply_info[:content]     = cont #回复的内容
+              reply_info[:comment_num] = info['content']['comment_num'] # 该回复的评论数
+              reply_info[:date]        = date #回复的时间
+  
+              # 回复贴的评论
+              if reply_info[:comment_num].to_i > 0 
+                pid      = info['content']['post_id']
+                pg,rem   = reply_info[:comment_num].to_i.divmod(10)
+  
+                if rem > 0 
+                  pg = pg + 1
+                else
+                  pg = pg
+                end
+  
+                cmts = []
+                1.upto(pg) do |pn|
+                  res  = get_cmts(tid,pid,pn)
+                  cmts << res  if res.length > 0 
+                end
+                cmts.flatten!
+                reply_info[:comments] = cmts
+              end
+              posts << reply_info
+            end
+          end
+  
+          unless @results["#{tid}"].present?
+            @results["#{tid}"]         = {}
+            @results["#{tid}"][:basic] =  basic
+            @results["#{tid}"][:posts] = []
+          end
+          @results["#{tid}"][:posts]   << posts
+  
+          @results["#{tid}"][:posts].flatten!
+        end
+        next_page = page.link_with(:text => '下一页')
+        if next_page
+          get_detail(next_page.href)
+        end 
+      end
+    end
+
+    def get_cmts(tid,pid,pn)
+      url     = "http://tieba.baidu.com/p/comment?tid=#{tid}&pid=#{pid}&pn=#{pn}&t=#{Time.now.to_i}"
+      begin
+        page    = @agent.get(url)
+      rescue
+        @logger.info  '-------------tieba agent get page error at  function get_cmts-------------'
+        @logger.info  @logger.info "error:#{$!} at:#{$@}"
+        begin
+          page    = @agent.get(url)  
+        rescue
+          @logger.info "------------  #{url} 获取page失败  ------------"
+        end
+        
+      end
+
+      
+      cnt_arr = []
+      if page.present?
+        page.search(".lzl_single_post .lzl_cnt").each do |cnt|
+          cnt_hash = {}
+          cnt_hash[:author]  = cnt.search("a.j_user_card").text
+          cnt_hash[:content] = cnt.search(".lzl_content_main").text.strip!
+          cnt_hash[:date]    = cnt.search(".lzl_time").text
+          cnt_arr << cnt_hash
+        end 
+      end
+      return cnt_arr
     end
 
     def get_agent
-      # agent = Mechanize.new
       agent = Mechanize.new do |a| 
         a.follow_meta_refresh = true
         a.keep_alive = false
@@ -56,126 +199,9 @@ module MovieSpider
       agent.user_agent_alias = 'Mac Safari'
       return agent  
     end
-
-    def get_links(agent)
-      links = []
-      if @limit == 0
-        uri    = URI::encode(@path)
-        page   = agent.get(uri)
-        @limit = page.link_with(:text => '尾页').href.split(/pn=/).last.to_i
-      end
-      0.step(@limit,50).each do |n|
-      # 90000.step(@limit,50).each do |n|
-        s1    = Time.now
-        uri   = URI::encode(@path)
-        if n > 0
-          uri = "#{uri}&pn=#{n}"
-        end
-        begin
-          page  = agent.get(uri)
-        rescue
-          sleep(3)
-          begin
-            page  = agent.get(uri)  
-          rescue
-            next
-          end
-        end
-        
-        
-        lis   = page.search('li.j_thread_list .t_con')
-        lis.each do |li|
-          begin
-            t1         = Time.now
-            hash       = Hash.new(0)
-            right_list = li.search('.threadlist_li_right')
-            link       = right_list.search('.threadlist_lz .threadlist_title a.j_th_tit').attr('href').value
-            link       = link.split(/\/p\//).last
-            links      << link
-            t2         = Time.now
-            @logger.info "---------获取一条链接耗时: #{t2 - t1} 秒   #{'http://tieba.baidu.com/p/' + link}  ----------"
-          rescue
-            @logger.info "---------获取链接时出错 已跳过 ------------"
-          end
-        end
-        s2 = Time.now
-        @logger.info "************** 链接 #{URI.decode(uri)} 获得 #{links.length} 个 url  耗时: #{s2 - s1 } 秒 **************"
-      end
-
-      return links
-    end
-
-    def start_crawl(agent,links)
-      expired_links = [] #盛放每次发现过期链接时,当时的link个数
-      results = []
-      focus   = 0
-      @logger.info  "^^^^^^^^^^^^^^^^^^^^^^^^  links  #{links.length}  个 ^^^^^^^^^^^^^^^^^^^^^^^^ "
-      links.each do |link|
-        begin
-          t1             =  Time.now
-          hash           =  Hash.new(0)
-          tid            =  link
-          link           =  'http://tieba.baidu.com/p/' + link
-          page           =  agent.get(link)
-          focus          =  page.search('.card_menNum').text
-          ag_container   =  page.search('#ag_container')
-
-          unless ag_container.present?
-            hash[:title]   =  page.search('.core_title_txt').text.gsub(/\s+/,'')
-            hash[:comment] =  page.search('.pb_footer ul.l_posts_num li[2]').search('span[1]').text
-            info           =  page.search('#j_p_postlist .l_post:first').attr('data-field').value
-            info           =  JSON.parse(info)
-            hash[:author]  =  info['author']['user_name']
-            hash[:created] =  info['content']['date']
-            unless hash[:created].present?
-              hash[:created] = page.search('#j_p_postlist .l_post:first').search('.j_reply_data').text
-            end
-          else
-            # 图册精选
-            hash[:comment] = page.search('.pb_footer').search('.l_reply_num[2]').search('span[1]').text()
-            kw   = @path.split(/kw=/).last.split(/&/).first   
-            uri  = URI::decode("http://tieba.baidu.com/photo/g/bw/picture/list?kw=#{kw}&tid=#{tid}&alt=jview&rn=200pn=1&ps=1&pe=40&info=1&_=#{Time.now}")
-            page = agent.get(uri)
-            json = JSON.parse(page.body)
-            hash[:title]   = json['data']['title'].encode('utf-8','gbk')
-            hash[:author]  = json['data']['user_name'].encode('utf-8','gbk')
-            hash[:created] = Time.at(json['data']['update_time']).strftime('%Y-%m-%d %H:%I:%S')         
-          end
-          # 如果发表的日期在2014年4月1日之后,则收录该信息,此举是为了获得2014年4月1日以后发表的帖子
-          if  Time.parse("#{hash[:created]}") >= Time.parse('2014-04-01 00:00')
-            t2             =  Time.now
-            results        << hash
-            @logger.info hash.inspect
-            @logger.info "============>耗时: #{t2 - t1} 秒  results #{results.length} 个 《=============="          
-          else
-            # expired_links 每次发现一个过期的帖子就存放一个当时链接个数,如果发有连续50个数字相同,则表示已经到达了2014-04-01这个点,
-            # 以后的循环就可以终止了
-            expired_links << results.length 
-            count_hash = Hash.new(0)
-            @logger.info "****************时间早于 2014-04-01 00:00   过期个数 #{expired_links.length} 个*****************"
-            expired_links.each do |el|
-              count_hash[el] += 1
-            end
-            exist = count_hash.select{|k,v| v > 50}
-            @logger.info('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-            @logger.info(exist.length)
-            @logger.info('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-            if exist.length > 0
-              break
-            end
-          end
-        rescue 
-          @logger.info "error:#{$!} at:#{$@}"
-          @logger.info "============> #{link}   出现错误 已跳过 《=============="
-          next
-        end
-      end
-      
-      return [focus.scan(/\d+/).join,results]
-    end
   end
 end
 
-# tieba = MovieSpider::Tieba.new('http://tieba.baidu.com/f?ie=utf-8&kw=李晨','/Users/x/cookies.txt',6300)
-# tieba.get_info
+# tieba = MovieSpider::Tieba.new('http://tieba.baidu.com/f?kw=%E6%88%91%E4%BB%AC15%E4%B8%AA&ie=utf-8','/Users/x/workspace/projects/ruby_projects/Crawler/cookies.txt',50)
+# res = tieba.start_crawl
 
