@@ -21,38 +21,39 @@ module MovieSpider
       		result = JSON.parse(result) 
       		if result["data"]
       			cursor   = result["data"]["cursor"]
-      			hasnext  = cursor['hasnext']
-      			nex      = cursor['next']
-      			post     = result["data"]["post"]
-      			
-      			
-      			post.each do |po|
-      				param    = {}
-      				param['postid']      =  po['postid']
-      				param['title']       =  po['custom']
-      				param['content']     =  po['content']
-      				param['orireplynum'] =  po['orireplynum'].to_i
-      				param['up']          =  po['up'].to_i
-      				param['author']      =  po['userinfo']['nick']
-      				param['gender']      =  po['userinfo']['gender'].to_i
-      				param['region']      =  po['userinfo']['region'] 
-      				param['time']        =  Time.at(po['time'])
-      				param['comments']    =  []
-
-      				p1,p2 = po['orireplynum'].to_i.divmod(10)
-      				if p2 > 0
-      					pg = p1 + 1
-      				else
-      					pg = p1
-      				end 
-      				1.upto(pg) do |i|
-      					comment = get_reply_info(po['postid'],i)  
-      					param['comments'].concat(comment)
-      				end    					
-      				@results << param
-      				@logger.info "#{po['postid']} --- #{param['title']} : 评论量： #{param['comments'].length}"
-					    @logger.info "=============================================" 				
-      			end
+            if cursor 
+              hasnext  = cursor['hasnext']
+              nex      = cursor['next']
+              post     = result["data"]["post"]
+            
+              post.each do |po|
+                param    = {}
+                param['postid']      =  po['postid']
+                param['title']       =  po['custom']
+                param['content']     =  po['content']
+                param['orireplynum'] =  po['orireplynum'].to_i
+                param['up']          =  po['up'].to_i
+                param['author']      =  po['userinfo']['nick']
+                param['gender']      =  po['userinfo']['gender'].to_i
+                param['region']      =  po['userinfo']['region'] 
+                param['time']        =  Time.at(po['time'])
+                param['comments']    =  []
+  
+                p1,p2 = po['orireplynum'].to_i.divmod(10)
+                if p2 > 0
+                  pg = p1 + 1
+                else
+                  pg = p1
+                end 
+                1.upto(pg) do |i|
+                  comment = get_reply_info(po['postid'],i)  
+                  param['comments'].concat(comment)
+                end             
+                @results << param
+                @logger.info "#{po['postid']} --- #{param['title']} : 评论量： #{param['comments'].length}"
+                @logger.info "============================================="        
+              end
+            end
       		end
       		if hasnext.present?
       			get_comment_info(nex)
