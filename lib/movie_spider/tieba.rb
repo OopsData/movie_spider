@@ -8,7 +8,8 @@ module MovieSpider
     # limit 表示要抓取的pn值,这个pn指的是每次翻页的时候改变的那个pn值
     # limit 值约大,表示抓取数据的时间距离今天越远
     # 比如说1000,那么只收集最活跃的1000条帖子的链接
-    def initialize(path,file,limit=0)
+    def initialize(name,path,file,limit=nil)
+      @name    = name
       @path    = path
       @agent   = nil
       @limit   = limit
@@ -20,10 +21,24 @@ module MovieSpider
 
     def start_crawl
       @agent = get_agent
-      page   = @agent.get(@path)
-      get_post_info(page)
-      focus  = get_focus(page)
-      return {focus:focus,results:@results}
+      page   = nil
+      begin
+        begin 
+          page = @agent.get(@path)  
+        rescue
+          @logger.info "链接 #{@name} #{@path} 获取page 失败==============="
+        end
+      end while page.nil?
+      if page.present?
+        get_post_info(page)
+        begin 
+          focus  = get_focus(page)
+        rescue
+          focus  = 0
+        end
+      end
+      
+      return @results
     end
 
     def get_focus(page)
@@ -31,26 +46,40 @@ module MovieSpider
     end
 
     def get_post_info(page)
-      interview = page.search(".interviewZero dt.listTitleCnt span.listThreadTitle a")
-      if interview
-        interview_link = interview.attr('href')
-        get_detail(interview_link) 
-        @logger.info '--------------------------------完成一个主题的抓取--------------------------------'
-      end
-
+      cpn = page.uri.request_uri.to_s.split('pn=').last
       page.search("#thread_list .j_thread_list .threadlist_title a").each do |link|
-        link =  "http://tieba.baidu.com" + link.attr('href')
-        get_detail(link)
-        @logger.info '--------------------------------完成一个主题的抓取--------------------------------'
+        if link 
+          link =  "http://tieba.baidu.com" + link.attr('href')
+          get_detail(link)
+          @logger.info "--------------------------------#{@name} 完成一个主题的抓取 #{link}--------------------------------"
+        end
       end
-      @logger.info '**********************************  完成一页主题的抓取  **********************************'
+      @logger.info "**********************************  #{@name} 完成第 #{cpn} 个主题的抓取  **********************************"
+
+
       next_page = page.link_with(:text => '下一页>')
       if next_page
         link    = next_page.href
+        link    = 'http://tieba.baidu.com' + link
         pn      = link.to_s.split('pn=').last.to_i
-        if pn   <= @limit
-          page  = @agent.get(next_page.href)
-          get_post_info(page)
+        page    = nil
+
+        begin
+          begin
+            page  = @agent.get(link) 
+          rescue
+            @logger.info  "链接 #{link} 获取失败"
+          end
+        end while page.nil?
+
+        if page
+          if @limit 
+            if pn   <= @limit
+              get_post_info(page)
+            end        
+          else
+            get_post_info(page)
+          end
         end
       end      
     end
@@ -60,23 +89,26 @@ module MovieSpider
       if tid.include?('?pn=')
         tid   = tid.split('?pn=').first
       end
+      page    = nil
       begin
-        page    = @agent.get(link)
-      rescue
-        @logger.info  '-------------tieba agent get page error  at function get_detail -------------'
-        @logger.info  @logger.info "error:#{$!} at:#{$@}"
         begin
-          page    = @agent.get(link)
+          page  = @agent.get(link)  
         rescue
-          @logger.info "------------  #{link} 链接 获取page 失败  ------------"
+          @logger.info "------------#{@name}  #{link} 链接 获取page 失败  ------------"
         end
-      end
+      end while page.nil? 
 
       if page.present?
         page404 = page.search('body.page404')
         unless  page404.present?
           posts  = [] # 盛放每页的post用
-          title  = page.search(".core_title_txt").attr('title').value
+          begin 
+            title  = page.search(".core_title_txt").attr('title').value
+          rescue
+            title  = '' # 没有标题，可能是图片贴
+          end
+          
+          
           reply  = page.search(".pb_footer .l_posts_num:first .l_reply_num .red:first").text
           basic  = {} # 盛放主题帖基本信息
           posts  = [] # 盛放跟帖信息
@@ -133,7 +165,6 @@ module MovieSpider
             @results["#{tid}"][:posts] = []
           end
           @results["#{tid}"][:posts]   << posts
-  
           @results["#{tid}"][:posts].flatten!
         end
         next_page = page.link_with(:text => '下一页')
@@ -144,20 +175,15 @@ module MovieSpider
     end
 
     def get_cmts(tid,pid,pn)
-      url     = "http://tieba.baidu.com/p/comment?tid=#{tid}&pid=#{pid}&pn=#{pn}&t=#{Time.now.to_i}"
+      url      = "http://tieba.baidu.com/p/comment?tid=#{tid}&pid=#{pid}&pn=#{pn}&t=#{Time.now.to_i}"
+      page     = nil
       begin
-        page    = @agent.get(url)
-      rescue
-        @logger.info  '-------------tieba agent get page error at  function get_cmts-------------'
-        @logger.info  @logger.info "error:#{$!} at:#{$@}"
         begin
-          page    = @agent.get(url)  
+          page = @agent.get(url)
         rescue
-          @logger.info "------------  #{url} 获取page失败  ------------"
+          @logger.info "------------#{@name}  #{url} 获取page失败  ------------"
         end
-        
-      end
-
+      end while page.nil?
       
       cnt_arr = []
       if page.present?
@@ -167,7 +193,8 @@ module MovieSpider
           cnt_hash[:content] = cnt.search(".lzl_content_main").text.strip!
           cnt_hash[:date]    = cnt.search(".lzl_time").text
           cnt_arr << cnt_hash
-        end 
+        end
+        @logger.info "------------ #{@name} #{url} 评论获取成功  ------------" 
       end
       return cnt_arr
     end
@@ -201,7 +228,4 @@ module MovieSpider
     end
   end
 end
-
-# tieba = MovieSpider::Tieba.new('http://tieba.baidu.com/f?kw=%E6%88%91%E4%BB%AC15%E4%B8%AA&ie=utf-8','/Users/x/workspace/projects/ruby_projects/Crawler/cookies.txt',50)
-# res = tieba.start_crawl
 

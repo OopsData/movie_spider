@@ -39,16 +39,16 @@ module MovieSpider
                 param['time']        =  Time.at(po['time'])
                 param['comments']    =  []
   
-                p1,p2 = po['orireplynum'].to_i.divmod(10)
-                if p2 > 0
-                  pg = p1 + 1
-                else
-                  pg = p1
-                end 
-                1.upto(pg) do |i|
-                  comment = get_reply_info(po['postid'],i)  
-                  param['comments'].concat(comment)
-                end             
+                # p1,p2 = po['orireplynum'].to_i.divmod(10)
+                # if p2 > 0
+                #   pg = p1 + 1
+                # else
+                #   pg = p1
+                # end 
+                # 1.upto(pg) do |i|
+                #   comment = get_reply_info(po['postid'],i)  
+                #   param['comments'].concat(comment)
+                # end             
                 @results << param
                 @logger.info "#{po['postid']} --- #{param['title']} : 评论量： #{param['comments'].length}"
                 @logger.info "============================================="        
