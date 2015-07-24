@@ -39,16 +39,16 @@ module MovieSpider
                 param['time']        =  Time.at(po['time'])
                 param['comments']    =  []
   
-                # p1,p2 = po['orireplynum'].to_i.divmod(10)
-                # if p2 > 0
-                #   pg = p1 + 1
-                # else
-                #   pg = p1
-                # end 
-                # 1.upto(pg) do |i|
-                #   comment = get_reply_info(po['postid'],i)  
-                #   param['comments'].concat(comment)
-                # end             
+                p1,p2 = po['orireplynum'].to_i.divmod(10)
+                if p2 > 0
+                  pg = p1 + 1
+                else
+                  pg = p1
+                end 
+                1.upto(pg) do |i|
+                  comment = get_reply_info(po['postid'],i)  
+                  param['comments'].concat(comment)
+                end             
                 @results << param
                 @logger.info "#{po['postid']} --- #{param['title']} : 评论量： #{param['comments'].length}"
                 @logger.info "============================================="        
@@ -100,14 +100,12 @@ module MovieSpider
       page   = nil
       url    = URI.encode(url.to_s.gsub(/\s+/,''))
       begin
-        page = @agent.get url
-      rescue
-        @logger.info  '-------------fantuan get agent.page error start -------------'
-        @logger.info  @logger.info "error:#{$!} at:#{$@}"
-        @logger.info  '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^'
-        @logger.info  URI.decode(url)
-        @logger.info  '-------------fantuan get agent.page error end -------------'
-      end
+        begin
+          page = @agent.get ur  
+        rescue
+          @logger.info  '-------------fantuan get agent.page error end -------------'
+        end
+      end while page.nil?
       return page
     end
 
