@@ -101,7 +101,7 @@ module MovieSpider
       url    = URI.encode(url.to_s.gsub(/\s+/,''))
       begin
         begin
-          page = @agent.get ur  
+          page = @agent.get url  
         rescue
           @logger.info  '-------------fantuan get agent.page error end -------------'
         end
