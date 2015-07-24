@@ -2,9 +2,11 @@ require 'mechanize'
 require 'logger'
 module MovieSpider
   class Fantuan
-    def initialize
+    def initialize(limit=nil)
       @logger  = Logger.new(STDOUT)
       @results = []
+      @limit   = limit
+      @timer   = 0 # 计数器
     end  
 
     def start_crawl
@@ -17,10 +19,14 @@ module MovieSpider
     	url  = "http://bar.qq.com/star/10142/post/list?limit=20&flip=1&cursor=#{cursor}&callback=topicList&low_login=1&_=#{Time.now.to_i}"
     	page = get_page(url)
     	if page.present?
-      		result = page.body.gsub('topicList(','').gsub('})','}')
-      		result = JSON.parse(result) 
-      		if result["data"]
-      			cursor   = result["data"]["cursor"]
+      	result = page.body.gsub('topicList(','').gsub('})','}')
+      	result = JSON.parse(result) 
+      	if result["data"]
+          @timer += 1
+          if @limit && @timer > @limit 
+            return false
+          else
+            cursor   = result["data"]["cursor"]
             if cursor 
               hasnext  = cursor['hasnext']
               nex      = cursor['next']
@@ -38,7 +44,7 @@ module MovieSpider
                 param['region']      =  po['userinfo']['region'] 
                 param['time']        =  Time.at(po['time'])
                 param['comments']    =  []
-  
+    
                 p1,p2 = po['orireplynum'].to_i.divmod(10)
                 if p2 > 0
                   pg = p1 + 1
@@ -54,15 +60,16 @@ module MovieSpider
                 @logger.info "============================================="        
               end
             end
-      		end
-      		if hasnext.present?
-      			get_comment_info(nex)
-      		end
+            if hasnext.present?
+              get_comment_info(nex)
+            end
+          end
+      	end
     	end
     end
 
     def get_reply_info(postid,pge)
-    	url = "http://bar.qq.com/star/10142/post/#{postid}/timeline/replies?flip=0&limit=10&direct=2&page=#{pge}&callback=mainComment&_=#{Time.now.to_i}"
+    	url = "http://bar.qq.com/star/10142/post/#{postid}/timeline/replies?flip=0&limit=10&direct=1&page=#{pge}&callback=mainComment&_=#{Time.now.to_i}"
     	page = get_page(url)
     	comment_arr = []
     	
@@ -106,6 +113,7 @@ module MovieSpider
           @logger.info  '-------------fantuan get agent.page error end -------------'
         end
       end while page.nil?
+
       return page
     end
 
