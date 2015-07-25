@@ -116,7 +116,8 @@ module MovieSpider
             info     = JSON.parse(post.attr('data-field'))
             cont     = post.search(".d_post_content_main .d_post_content").text.strip!
             date     = info['content']['date']
-  
+            post_id  = info['content']['post_id']
+            date     = date.present? ? date.split(' ').first : ''
             if info['content']['post_no'] == 1
               #主题帖
               basic[:author]        = {}
@@ -131,6 +132,7 @@ module MovieSpider
             else
               #回复主题帖
               reply_info = {}
+              reply_info[:post_id]     = post_id
               reply_info[:author]      = info["author"]["user_name"] # 回复的作者
               reply_info[:content]     = cont #回复的内容
               reply_info[:comment_num] = info['content']['comment_num'] # 该回复的评论数
@@ -138,7 +140,7 @@ module MovieSpider
   
               # 回复贴的评论
               if reply_info[:comment_num].to_i > 0 
-                pid      = info['content']['post_id']
+                pid      = post_id
                 pg,rem   = reply_info[:comment_num].to_i.divmod(10)
   
                 if rem > 0 
@@ -187,13 +189,30 @@ module MovieSpider
       
       cnt_arr = []
       if page.present?
-        page.search(".lzl_single_post .lzl_cnt").each do |cnt|
+        page.search(".lzl_single_post").each do |post|
+          inf      = JSON.parse(post.attr('data-field'))
+          cmt_id   = inf['spid']
+          cnt      = post.search('.lzl_cnt')
           cnt_hash = {}
+          cnt_hash[:cmt_id]  = cmt_id
           cnt_hash[:author]  = cnt.search("a.j_user_card").text
           cnt_hash[:content] = cnt.search(".lzl_content_main").text.strip!
-          cnt_hash[:date]    = cnt.search(".lzl_time").text
+          date               = cnt.search(".lzl_time").text
+          if date.present?
+            date = date.split(' ').first
+          else
+            date = ''
+          end
+          cnt_hash[:date]    = date
           cnt_arr << cnt_hash
         end
+        # page.search(".lzl_single_post .lzl_cnt").each do |cnt|
+        #   cnt_hash = {}
+        #   cnt_hash[:author]  = cnt.search("a.j_user_card").text
+        #   cnt_hash[:content] = cnt.search(".lzl_content_main").text.strip!
+        #   cnt_hash[:date]    = cnt.search(".lzl_time").text
+        #   cnt_arr << cnt_hash
+        # end
         @logger.info "------------ #{@name} #{url} 评论获取成功  ------------" 
       end
       return cnt_arr
