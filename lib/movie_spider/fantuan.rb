@@ -12,6 +12,7 @@ module MovieSpider
     def start_crawl
     	@agent = get_agent
     	get_comment_info
+      @logger.info '&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&开始提交数据&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&'
     	return @results
     end	
 
