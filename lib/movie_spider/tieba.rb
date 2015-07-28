@@ -26,7 +26,6 @@ module MovieSpider
         begin 
           page = @agent.get(@path)  
         rescue
-          @logger.info "链接 #{@name} #{@path} 获取page 失败==============="
         end
       end while page.nil?
       if page.present?
@@ -51,7 +50,6 @@ module MovieSpider
         if link 
           link =  "http://tieba.baidu.com" + link.attr('href')
           get_detail(link)
-          @logger.info "--------------------------------#{@name} 完成一个主题的抓取 #{link}--------------------------------"
         end
       end
       @logger.info "**********************************  #{@name} 完成第 #{cpn} 个主题的抓取  **********************************"
@@ -68,7 +66,6 @@ module MovieSpider
           begin
             page  = @agent.get(link) 
           rescue
-            @logger.info  "链接 #{link} 获取失败"
           end
         end while page.nil?
 
@@ -94,7 +91,6 @@ module MovieSpider
         begin
           page  = @agent.get(link)  
         rescue
-          @logger.info "------------#{@name}  #{link} 链接 获取page 失败  ------------"
         end
       end while page.nil? 
 
@@ -183,7 +179,6 @@ module MovieSpider
         begin
           page = @agent.get(url)
         rescue
-          @logger.info "------------#{@name}  #{url} 获取page失败  ------------"
         end
       end while page.nil?
       
@@ -206,14 +201,6 @@ module MovieSpider
           cnt_hash[:date]    = date
           cnt_arr << cnt_hash
         end
-        # page.search(".lzl_single_post .lzl_cnt").each do |cnt|
-        #   cnt_hash = {}
-        #   cnt_hash[:author]  = cnt.search("a.j_user_card").text
-        #   cnt_hash[:content] = cnt.search(".lzl_content_main").text.strip!
-        #   cnt_hash[:date]    = cnt.search(".lzl_time").text
-        #   cnt_arr << cnt_hash
-        # end
-        @logger.info "------------ #{@name} #{url} 评论获取成功  ------------" 
       end
       return cnt_arr
     end
