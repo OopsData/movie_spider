@@ -36,7 +36,7 @@ module MovieSpider
           focus  = 0
         end
       end
-      
+      @logger.info "----------------开始提交数据----------------"
       return @results
     end
 
@@ -109,7 +109,12 @@ module MovieSpider
           basic  = {} # 盛放主题帖基本信息
           posts  = [] # 盛放跟帖信息
           page.search(".l_post").each do |post|
-            info     = JSON.parse(post.attr('data-field'))
+            begin
+              info     = JSON.parse(post.attr('data-field'))
+            rescue
+              next
+            end
+            
             cont     = post.search(".d_post_content_main .d_post_content").text.strip!
             date     = info['content']['date']
             post_id  = info['content']['post_id']
