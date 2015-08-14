@@ -12,7 +12,7 @@ module MovieSpider
     def start_crawl
     	@agent = get_agent
     	get_comment_info
-      @logger.info '&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&开始提交数据&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&'
+      #@logger.info '&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&开始提交数据&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&'
     	return @results
     end	
 
@@ -58,7 +58,7 @@ module MovieSpider
                 end             
                 @results << param
                 @logger.info "#{po['postid']} --- #{param['title']} : 评论量： #{param['comments'].length}"
-                @logger.info "============================================="        
+                #@logger.info "============================================="        
               end
             end
             if hasnext.present?
@@ -111,7 +111,7 @@ module MovieSpider
         begin
           page = @agent.get url  
         rescue
-          @logger.info  '-------------fantuan get agent.page error end -------------'
+          #@logger.info  '-------------fantuan get agent.page error end -------------'
         end
       end while page.nil?
 
