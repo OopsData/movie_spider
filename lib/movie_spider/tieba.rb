@@ -52,7 +52,7 @@ module MovieSpider
           get_detail(link)
         end
       end
-      #@logger.info "**********************************  #{@name} 完成第 #{cpn} 个主题的抓取  **********************************"
+      @logger.info "**********************************  #{@name} 完成第 #{cpn} 个主题的抓取  **********************************"
 
 
       next_page = page.link_with(:text => '下一页>')
