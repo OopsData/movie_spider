@@ -57,7 +57,7 @@ module MovieSpider
                   param['comments'].concat(comment)
                 end             
                 @results << param
-                @logger.info "#{po['postid']} --- #{param['title']} : 评论量： #{param['comments'].length}"
+                #@logger.info "#{po['postid']} --- #{param['title']} : 评论量： #{param['comments'].length}"
                 #@logger.info "============================================="        
               end
             end
