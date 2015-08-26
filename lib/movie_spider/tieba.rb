@@ -1,6 +1,7 @@
 #require 'micro_spider'
 require 'mechanize'
 require 'logger'
+require 'open-uri'
 module MovieSpider
   class Tieba
     # path 贴吧主页地址
@@ -22,6 +23,7 @@ module MovieSpider
     def start_crawl
       @agent = get_agent
       page   = nil
+      #get_post_info_extend(@path)
       begin
         begin 
           page = @agent.get(@path)  
@@ -44,41 +46,62 @@ module MovieSpider
       focus = page.search('.j_post_num')[0].text().scan(/\d+/).join('').to_i
     end
 
+    def get_post_info_extend(url)
+      doc = Nokogiri::HTML(open(url))
+      doc.css("#thread_list .j_thread_list .threadlist_title a").each do |link|
+        get_detail('http://tieba.baidu.com' + link.attr('href'))
+        #@logger.info '----complete one theme----'
+      end
+      next_page = doc.css('#frs_list_pager a.next')
+      if next_page && next_page.length > 0 
+        begin 
+          link = next_page.attr('href').value
+        rescue
+          @logger.info next_page
+        end
+        #@logger.info '----complete one page----'
+        get_post_info_extend(link)
+      end
+    end
+
     def get_post_info(page)
       cpn = page.uri.request_uri.to_s.split('pn=').last
-      page.search("#thread_list .j_thread_list .threadlist_title a").each do |link|
-        if link 
-          link =  "http://tieba.baidu.com" + link.attr('href')
-          get_detail(link)
+      thread_list = page.search("#thread_list")
+      if thread_list.length > 0 
+        page.search("#thread_list .j_thread_list .threadlist_title a").each do |link|
+          if link 
+            link =  "http://tieba.baidu.com" + link.attr('href')
+            get_detail(link)
+          end
         end
-      end
-      @logger.info "**********************************  #{@name} 完成第 #{cpn} 个主题的抓取  **********************************"
-
-
-      next_page = page.link_with(:text => '下一页>')
-      if next_page
-        link    = next_page.href
-        link    = 'http://tieba.baidu.com' + link
-        pn      = link.to_s.split('pn=').last.to_i
-        page    = nil
-
-        begin
+        @logger.info "**********************************  #{@name} 完成第 #{cpn} 个主题的抓取  **********************************"
+        next_page = page.link_with(:text => '下一页>')
+        if next_page
+          link    = next_page.href
+          link    = 'http://tieba.baidu.com' + link
+          pn      = link.to_s.split('pn=').last.to_i
+          page    = nil
+  
           begin
-            page  = @agent.get(link) 
-          rescue
-          end
-        end while page.nil?
-
-        if page
-          if @limit 
-            if pn   <= @limit
+            begin
+              page  = @agent.get(link) 
+            rescue
+            end
+          end while page.nil?
+  
+          if page
+            if @limit 
+              if pn   <= @limit
+                get_post_info(page)
+              end        
+            else
               get_post_info(page)
-            end        
-          else
-            get_post_info(page)
+            end
           end
-        end
-      end      
+        end 
+      else
+        get_post_info_extend(page.uri.to_s)
+      end     
     end
 
     def get_detail(link)
@@ -114,9 +137,11 @@ module MovieSpider
             rescue
               next
             end
-            
-            cont     = post.search(".d_post_content_main .d_post_content").text.strip!
+
+            cont     = post.search(".d_post_content_main .d_post_content").text
+            #cont     = post.search(".d_post_content_main .d_post_content").text.strip!
             date     = info['content']['date']
+            date     = post.search('.post-tail-wrap span.tail-info:last').text unless date.present?
             post_id  = info['content']['post_id']
             date     = date.present? ? date.split(' ').first : ''
             if info['content']['post_no'] == 1
@@ -127,9 +152,9 @@ module MovieSpider
               basic[:date]          = date
               basic[:reply]         = reply
               basic[:author][:name] = info["author"]["user_name"]
-              basic[:author][:sex]  = info['author']['user_sex'] == 2 ? '女' : '男'
-              basic[:author][:level_id]   =  info["author"]["level_id"]
-              basic[:author][:level_name] =  info["author"]["level_name"]
+              # basic[:author][:sex]  = info['author']['user_sex'] == 2 ? '女' : '男'
+              # basic[:author][:level_id]   =  info["author"]["level_id"]
+              # basic[:author][:level_name] =  info["author"]["level_name"]
             else
               #回复主题帖
               reply_info = {}
@@ -168,8 +193,9 @@ module MovieSpider
             @results["#{tid}"][:posts] = []
           end
           @results["#{tid}"][:posts]   << posts
-          @results["#{tid}"][:posts].flatten!
+          @results["#{tid}"][:posts].flatten!        
         end
+
         next_page = page.link_with(:text => '下一页')
         if next_page
           get_detail(next_page.href)
