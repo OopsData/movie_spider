@@ -23,7 +23,6 @@ module MovieSpider
     def start_crawl
       @agent = get_agent
       page   = nil
-      #get_post_info_extend(@path)
       begin
         begin 
           page = @agent.get(@path)  
@@ -38,7 +37,6 @@ module MovieSpider
           focus  = 0
         end
       end
-      #@logger.info "----------------开始提交数据----------------"
       return @results
     end
 
@@ -50,7 +48,7 @@ module MovieSpider
       doc = Nokogiri::HTML(open(url))
       doc.css("#thread_list .j_thread_list .threadlist_title a").each do |link|
         get_detail('http://tieba.baidu.com' + link.attr('href'))
-        #@logger.info '----complete one theme----'
+        @logger.info '----complete one theme----'
       end
       next_page = doc.css('#frs_list_pager a.next')
       if next_page && next_page.length > 0 
@@ -74,7 +72,7 @@ module MovieSpider
             get_detail(link)
           end
         end
-        @logger.info "**********************************  #{@name} 完成第 #{cpn} 个主题的抓取  **********************************"
+        #@logger.info "**********************************  #{@name} 完成第 #{cpn} 个主题的抓取  **********************************"
         next_page = page.link_with(:text => '下一页>')
         if next_page
           link    = next_page.href
@@ -105,6 +103,7 @@ module MovieSpider
     end
 
     def get_detail(link)
+      link = link.match('http') ? link : 'http://tieba.baidu.com' + link
       tid     = link.to_s.split('/p/').last
       if tid.include?('?pn=')
         tid   = tid.split('?pn=').first
@@ -195,7 +194,8 @@ module MovieSpider
           @results["#{tid}"][:posts]   << posts
           @results["#{tid}"][:posts].flatten!        
         end
-
+        #@logger.info @results.inspect 
+        #@logger.info '-------------------'
         next_page = page.link_with(:text => '下一页')
         if next_page
           get_detail(next_page.href)
