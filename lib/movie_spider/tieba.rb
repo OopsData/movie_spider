@@ -244,21 +244,6 @@ module MovieSpider
         a.user_agent_alias = 'Mac Safari'
         a.gzip_enabled = false
       end
-
-
-      # if File.exist?(@file)
-      #   mtime = File.mtime(@file)
-      #   ntime = Time.now
-      #   dur   = ntime - mtime
-
-      #   if dur >= 3600 * 24 * 7
-      #     @logger.info '---------cookie 文件超过七天,请重新生成cookie文件 --------'  
-      #     return false
-      #   end
-      # else
-      #   @logger.info '---------cookie 文件不存在 --------'
-      #   return false
-      # end
       agent.cookie_jar.load_cookiestxt(@file)
       agent.user_agent_alias = 'Mac Safari'
       return agent  
