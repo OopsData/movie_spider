@@ -197,7 +197,7 @@ module MovieSpider
           @results["#{tid}"][:posts]   << posts
           @results["#{tid}"][:posts].flatten!        
         end
-        puts @results.inspect 
+        # puts @results.inspect 
         #@logger.info '-------------------'
         next_page = page.link_with(:text => '下一页')
         if next_page
