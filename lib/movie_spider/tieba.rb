@@ -73,6 +73,7 @@ module MovieSpider
           end
         end
         #@logger.info "**********************************  #{@name} 完成第 #{cpn} 个主题的抓取  **********************************"
+        puts "**********************************  #{@name} 完成第 #{cpn} 个主题的抓取  **********************************"
         next_page = page.link_with(:text => '下一页>')
         if next_page
           link    = next_page.href
@@ -194,7 +195,7 @@ module MovieSpider
           @results["#{tid}"][:posts]   << posts
           @results["#{tid}"][:posts].flatten!        
         end
-        #@logger.info @results.inspect 
+        puts @results.inspect 
         #@logger.info '-------------------'
         next_page = page.link_with(:text => '下一页')
         if next_page

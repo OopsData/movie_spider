@@ -83,6 +83,7 @@ module MovieSpider
           get_info_data(page)    
         rescue
           @logger.info "error:#{$!} at:#{$@}"
+          puts "error:#{$!} at:#{$@}"
           retry
         end
       else
