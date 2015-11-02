@@ -25,7 +25,8 @@ module MovieSpider
       page   = nil
       begin
         begin 
-          page = @agent.get(@path)  
+          page = @agent.get(@path) 
+          p page 
         rescue
         end
       end while page.nil?
