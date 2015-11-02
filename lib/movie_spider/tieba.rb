@@ -23,6 +23,7 @@ module MovieSpider
     def start_crawl
       @agent = get_agent
       page   = nil
+      p "start crawl"
       begin
         begin 
           page = @agent.get(@path) 
